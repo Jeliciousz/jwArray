@@ -180,7 +180,7 @@
             disableMonitor: true
         },
         Argument: {
-            shape: BlockShape.SQUARE,
+            shape: Scratch.BlockShape.SQUARE,
             exemptFromNormalization: true,
             check: ["Array"],
             compilerInfo: {
