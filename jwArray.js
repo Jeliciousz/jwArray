@@ -658,6 +658,42 @@
                         }
                     },
                     {
+                        opcode: 'map',
+                        text: 'map [ARRAY] [I] [V] => [VALUE]',
+                        arguments: {
+                            ARRAY: jwArray.Argument,
+                            I: {
+                                fillIn: 'forEachI'
+                            },
+                            V: {
+                                fillIn: 'forEachV'
+                            },
+                            VALUE: {
+                                type: Scratch.ArgumentType.NUMBER,
+                                defaultValue: 1
+                            }
+                        },
+                        ...jwArray.Block
+                    },
+                    {
+                        opcode: 'filter',
+                        text: 'filter [ARRAY] [I] [V] => [VALUE]',
+                        arguments: {
+                            ARRAY: jwArray.Argument,
+                            I: {
+                                fillIn: 'forEachI'
+                            },
+                            V: {
+                                fillIn: 'forEachV'
+                            },
+                            VALUE: {
+                                type: Scratch.ArgumentType.BOOLEAN,
+                                defaultValue: true
+                            }
+                        },
+                        ...jwArray.Block
+                    },
+                    {
                         opcode: 'basicSort',
                         text: 'sort [ARRAY] [I] [V] > [VALUE]',
                         arguments: {
@@ -710,6 +746,22 @@
                             array: generator.descendInputOfBlock(block, 'ARRAY'),
                         }
                     },
+                    map: (generator, block) => {
+                        generator.script.yields = true
+                        return {
+                            kind: 'input',
+                            array: generator.descendInputOfBlock(block, 'ARRAY'),
+                            value: generator.descendInputOfBlock(block, 'VALUE'),
+                        }
+                    },
+                    filter: (generator, block) => {
+                        generator.script.yields = true
+                        return {
+                            kind: 'input',
+                            array: generator.descendInputOfBlock(block, 'ARRAY'),
+                            value: generator.descendInputOfBlock(block, 'VALUE'),
+                        }
+                    },
                     basicSort: (generator, block) => {
                         generator.script.yields = true
                         return {
@@ -750,6 +802,54 @@
                         compiler.source += `if (${output} !== undefined) {\n`
                         compiler.source += `return ${output};\n`
                         compiler.source += `};\n`
+                    },
+                    map: (node, compiler, imports) => {
+                        const originalSource = compiler.source;
+                        compiler.source = '(yield* (function*() {';
+                        compiler.source += `thread._jwArrayForEach ??= [];\n`
+                        const forIndex = compiler.localVariables.next();
+                        compiler.source += `let ${forIndex} = thread._jwArrayForEach.push([]) - 1;\n`
+                        const og = compiler.localVariables.next();
+                        const out = compiler.localVariables.next();
+                        compiler.source += `let ${og} = vm.jwArray.Type.toArray(${compiler.descendInput(node.array).asUnknown()}, true).array;\n`
+                        compiler.source += `let ${out} = [];\n`
+                        const i = compiler.localVariables.next();
+                        compiler.source += `for (let ${i} = 0; ${i} < ${og}.length; ${i}++) {\n`
+                        compiler.source += `thread._jwArrayForEach[${forIndex}] = [${i} + 1, ${og}[${i}]];\n`
+                        compiler.source += `${out}.push(${compiler.descendInput(node.value).asNumber()});\n`
+                        compiler.source += `};\n`
+                        compiler.source += `thread._jwArrayForEach.pop();\n`
+                        compiler.source += `return new vm.jwArray.Type(${out});\n`
+                        compiler.source += '})())';
+                        // save edited
+                        const stackSource = compiler.source;
+                        compiler.source = originalSource;
+                        return new imports.TypedInput(stackSource, imports.TYPE_UNKNOWN);
+                    },
+                    filter: (node, compiler, imports) => {
+                        const originalSource = compiler.source;
+                        compiler.source = '(yield* (function*() {';
+                        compiler.source += `thread._jwArrayForEach ??= [];\n`
+                        const forIndex = compiler.localVariables.next();
+                        compiler.source += `let ${forIndex} = thread._jwArrayForEach.push([]) - 1;\n`
+                        const og = compiler.localVariables.next();
+                        const out = compiler.localVariables.next();
+                        compiler.source += `let ${og} = vm.jwArray.Type.toArray(${compiler.descendInput(node.array).asUnknown()}, true).array;\n`
+                        compiler.source += `let ${out} = [];\n`
+                        const i = compiler.localVariables.next();
+                        compiler.source += `for (let ${i} = 0; ${i} < ${og}.length; ${i}++) {\n`
+                        compiler.source += `thread._jwArrayForEach[${forIndex}] = [${i} + 1, ${og}[${i}]];\n`
+                        compiler.source += `if (${compiler.descendInput(node.value).asBoolean()}) {\n`
+                        compiler.source += `${out}.push(${og}[${i}]);\n`
+                        compiler.source += `}\n`
+                        compiler.source += `};\n`
+                        compiler.source += `thread._jwArrayForEach.pop();\n`
+                        compiler.source += `return new vm.jwArray.Type(${out});\n`
+                        compiler.source += '})())';
+                        // save edited
+                        const stackSource = compiler.source;
+                        compiler.source = originalSource;
+                        return new imports.TypedInput(stackSource, imports.TYPE_UNKNOWN);
                     },
                     basicSort: (node, compiler, imports) => {
                         const originalSource = compiler.source;
@@ -938,6 +1038,14 @@
             ARRAY = jwArray.Type.toArray(ARRAY, true)
 
             return ARRAY.array.reduce((o, v) => o + Cast.toNumber(v), 0)
+        }
+
+        map() {
+            return 'noop'
+        }
+
+        filter() {
+            return 'noop'
         }
 
         forEachI({}, util) {
